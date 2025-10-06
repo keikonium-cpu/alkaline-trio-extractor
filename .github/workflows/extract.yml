@@ -14,8 +14,8 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}  # For committing back
-        persist-credentials: true  # Enable credential persistence for push
+        token: ${{ secrets.GITTY_PAT }}  # Use PAT for full write access
+        persist-credentials: true  # Enable for push
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -36,3 +36,4 @@ jobs:
       with:
         commit_message: Update listings.json with new data - ${{ github.run_id }} - $(date)
         file_pattern: listings.json
+        token: ${{ secrets.GITTY_PAT }}  # Use PAT for push
