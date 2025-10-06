@@ -22,11 +22,15 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies
+    - name: Install system dependencies (Chrome for Selenium)
       run: |
         sudo apt-get update
-        sudo apt-get install -y tesseract-ocr
-        pip install -r requirements.txt
+        sudo apt-get install -y tesseract-ocr google-chrome-stable
+        # Verify Chrome
+        google-chrome --version
+
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
 
     - name: Run extraction script
       run: python extract_ebay.py
