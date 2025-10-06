@@ -19,8 +19,16 @@ def fetch_image_urls(base_url):
         soup = BeautifulSoup(html, 'html.parser')
         
         # Select .gallery-item divs, get data-id, and src from inner img
+        gallery_divs = soup.find_all('div', class_='gallery-item')
+        print(f"Found {len(gallery_divs)} gallery-item divs")  # Debug: Check selector
+        
+        if len(gallery_divs) == 0:
+            print("No gallery-item divs found. HTML snippet (first 1000 chars):")
+            print(html[:1000])  # Debug: Show HTML to diagnose
+            return {}
+        
         image_urls = {}
-        for gallery in soup.find_all('div', class_='gallery-item'):
+        for gallery in gallery_divs:
             img_id = gallery.get('data-id')
             img_tag = gallery.find('img')
             src = img_tag.get('src') if img_tag else None
@@ -42,6 +50,7 @@ def extract_ebay_listings(image_url):
         
         text = pytesseract.image_to_string(img)
         lines = [line.strip() for line in text.split('\n') if line.strip()]
+        print(f"OCR extracted {len(lines)} lines (first 5): {lines[:5]}")  # Debug: Sample lines
         
         listings = []
         current = {}
