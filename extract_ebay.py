@@ -22,10 +22,14 @@ def fetch_image_urls(base_url):
         print(f"Loading page with Selenium: {base_url}")
         driver.get(base_url)
         
-        # Wait for gallery items to load (up to 30s)
+        # Wait for at least one gallery item to load (up to 30s)
         wait = WebDriverWait(driver, 30)
-        gallery_divs = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".gallery-item")))
-        print(f"Found {len(gallery_divs)} gallery-item divs after JS load")  # Debug
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".gallery-item")))
+        print("First gallery-item detected—JS loaded successfully!")
+        
+        # Now get ALL gallery items
+        gallery_divs = driver.find_elements(By.CSS_SELECTOR, ".gallery-item")
+        print(f"Found {len(gallery_divs)} gallery-item divs after JS load")  # Debug: Now safe len()
         
         # Get full rendered HTML
         html = driver.page_source
@@ -53,11 +57,17 @@ def fetch_image_urls(base_url):
         return image_urls
     except Exception as e:
         print(f"Error fetching image URLs with Selenium: {e}")
+        # On error, try to get page source for debug
+        try:
+            driver.quit()
+        except:
+            pass
         return {}
 
 def extract_ebay_listings(image_url):
     """Perform OCR on an image URL and return parsed listing data."""
     try:
+        import requests
         from io import BytesIO
         from PIL import Image
         import pytesseract
@@ -140,7 +150,6 @@ def update_listings():
     return len(new_listings) > 0  # True if changes made
 
 if __name__ == "__main__":
-    import requests  # Import here to avoid Selenium dependency
     updated = update_listings()
     if updated:
         print("Run committed changes to repo.")  # Handled by workflow
