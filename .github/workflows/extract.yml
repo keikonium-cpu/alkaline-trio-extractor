@@ -1,0 +1,45 @@
+name: Extract eBay Listings
+
+on:
+  schedule:
+    # Runs at 7 AM EST (11 UTC) and 7 PM EST (23 UTC)
+    - cron: '0 11,23 * * *'
+  workflow_dispatch:  # Allows manual trigger for testing
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest  # Free Linux runner
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}  # For committing back
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tesseract-ocr
+        pip install -r requirements.txt
+
+    - name: Run extraction script
+      run: python extract_ebay.py
+
+    - name: Commit updated JSON if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add listings.json || true
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update listings.json with new data - $(date)"
+          git push
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
