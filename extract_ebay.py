@@ -18,16 +18,14 @@ def fetch_image_urls(base_url):
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Adjust this selector based on your HTML (e.g., img tags with data-id)
-        # Example: assumes <img src="..." data-id="123">; tweak if needed
+        # Select .gallery-item divs, get data-id, and src from inner img
         image_urls = {}
-        for img in soup.find_all('img', attrs={'data-id': True}):
-            img_id = img.get('data-id')
-            src = img.get('src')
+        for gallery in soup.find_all('div', class_='gallery-item'):
+            img_id = gallery.get('data-id')
+            img_tag = gallery.find('img')
+            src = img_tag.get('src') if img_tag else None
             if img_id and src:
-                # Ensure full URL if relative
-                if not src.startswith('http'):
-                    src = base_url.rstrip('/') + '/' + src.lstrip('/')
+                # src is already full URL (Cloudinary), no need to resolve relative
                 image_urls[img_id] = src
         print(f"Found {len(image_urls)} image URLs: {list(image_urls.keys())}")  # Debug log
         return image_urls
