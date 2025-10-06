@@ -77,32 +77,50 @@ def extract_ebay_listings(image_url):
         img = Image.open(BytesIO(response.content))
         
         text = pytesseract.image_to_string(img)
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        print(f"OCR extracted {len(lines)} lines (first 5): {lines[:5]}")  # Debug: Sample lines
+        lines = [line.strip() for line in text.split('\n') if line.strip() and len(line) > 2]  # Basic filter: non-empty, >2 chars
+        print(f"OCR extracted {len(lines)} raw lines (first 5): {lines[:5]}")  # Debug: Sample raw
+        
+        # Ignore common junk lines
+        junk_patterns = [
+            re.compile(r'^(Free|Located|View|eBay|Buy|Ships)$', re.I),  # Headers/shipping
+            re.compile(r'^\d+%?\s*\(\d+[KkMm]?\)$'),  # Pure ratings like "99% (30K)"
+            re.compile(r'^\d{1,3}$'),  # Standalone numbers
+        ]
+        filtered_lines = [line for line in lines if not any(pat.match(line) for pat in junk_patterns)]
+        print(f"Filtered to {len(filtered_lines)} clean lines (first 3): {filtered_lines[:3]}")  # Debug
         
         listings = []
-        current = {}
-        seller_regex = re.compile(r'^\w+\s*(?:\d{1,3}%?)?\s*\(\d+(?:\.\d+)?[KkMm]?\)$')
+        current = {'listing_title': ''}  # Start with empty title
+        in_listing = False
         
-        for line in lines:
-            if line.startswith('Sold'):
-                if current.get('sold_date'):
+        for line in filtered_lines:
+            if line.startswith('Sold') and re.match(r'Sold\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}', line):
+                # New listing: Save previous if valid
+                if in_listing and current.get('sold_date') and current['listing_title'].strip() and current.get('sold_price'):
                     listings.append(current)
-                current = {'sold_date': line}
-            elif line.startswith('$'):
-                current['sold_price'] = line
-            elif seller_regex.match(line) or 'positive' in line.lower():
-                current['seller'] = line
-            else:
-                if 'listing_title' in current:
-                    current['listing_title'] += ' ' + line
-                else:
-                    current['listing_title'] = line
+                current = {'sold_date': line, 'listing_title': ''}
+                in_listing = True
+                continue
+            
+            if in_listing:
+                if line.startswith('$') and re.match(r'^\$[\d,]+\.?\d{0,2}$', line):  # e.g., "$8.20" or "$12,345"
+                    current['sold_price'] = line
+                    continue  # Title is done; next "Sold" starts new
+                
+                # Title: Must contain "alkaline" (black text pattern), append if multi-line
+                if 'alkaline' in line.lower() and not re.match(r'^\$[\d,]+\.?\d{0,2}$', line):
+                    current['listing_title'] += (' ' if current['listing_title'] else '') + line
+                    continue
+                
+                # Ignore other lines (e.g., sellers like "username 99% (257K)")
+                if re.match(r'^\w+\s+\d+%?\s*\(\d+[KkMm]?\)$', line):
+                    continue  # Skip sellers
         
-        if current.get('sold_date'):
+        # Add final listing if valid
+        if in_listing and current.get('sold_date') and current['listing_title'].strip() and current.get('sold_price'):
             listings.append(current)
         
-        print(f"Extracted {len(listings)} listings from {image_url}")  # Debug log
+        print(f"Extracted {len(listings)} clean listings from {image_url}. Sample: {listings[0] if listings else 'None'}")  # Debug
         return listings
     except Exception as e:
         print(f"Error processing {image_url}: {e}")
