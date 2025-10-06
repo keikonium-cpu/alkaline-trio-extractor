@@ -14,7 +14,7 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}  # For committing back
+        persist-credentials: false  # Avoid credential conflicts for push
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -30,18 +30,8 @@ jobs:
     - name: Run extraction script
       run: python extract_ebay.py
 
-    - name: Commit updated JSON if changed
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        # Set remote URL with token for authenticated push
-        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-        git add listings.json || true
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-        else
-          git commit -m "Update listings.json with new data - $(date)"
-          git push
-        fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Commit and push updated JSON
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: Update listings.json with new data - ${{ github.run_id }} - $(date)
+        file_pattern: listings.json
