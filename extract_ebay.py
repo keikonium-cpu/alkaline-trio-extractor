@@ -1,49 +1,67 @@
-import requests
-from io import BytesIO
-from PIL import Image
-import pytesseract
 import json
 import re
 import os
 from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from bs4 import BeautifulSoup
 
 def fetch_image_urls(base_url):
-    """Fetch the HTML and extract image URLs with unique IDs."""
+    """Fetch the rendered HTML with Selenium and extract image URLs with unique IDs."""
     try:
-        response = requests.get(base_url)
-        response.raise_for_status()
-        html = response.text
+        # Set up headless Chrome
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        driver = webdriver.Chrome(options=chrome_options)
         
-        # Use BeautifulSoup for robust parsing
-        from bs4 import BeautifulSoup
+        print(f"Loading page with Selenium: {base_url}")
+        driver.get(base_url)
+        
+        # Wait for gallery items to load (up to 30s)
+        wait = WebDriverWait(driver, 30)
+        gallery_divs = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".gallery-item")))
+        print(f"Found {len(gallery_divs)} gallery-item divs after JS load")  # Debug
+        
+        # Get full rendered HTML
+        html = driver.page_source
         soup = BeautifulSoup(html, 'html.parser')
         
         # Select .gallery-item divs, get data-id, and src from inner img
-        gallery_divs = soup.find_all('div', class_='gallery-item')
-        print(f"Found {len(gallery_divs)} gallery-item divs")  # Debug: Check selector
+        gallery_elements = soup.find_all('div', class_='gallery-item')
+        print(f"Parsed {len(gallery_elements)} gallery-item divs in HTML")  # Debug
         
-        if len(gallery_divs) == 0:
-            print("No gallery-item divs found. HTML snippet (first 1000 chars):")
-            print(html[:1000])  # Debug: Show HTML to diagnose
+        if len(gallery_elements) == 0:
+            print("No gallery-item divs found in rendered HTML. Snippet (first 1000 chars):")
+            print(html[:1000])  # Debug: Show rendered HTML
+            driver.quit()
             return {}
         
         image_urls = {}
-        for gallery in gallery_divs:
+        for gallery in gallery_elements:
             img_id = gallery.get('data-id')
             img_tag = gallery.find('img')
             src = img_tag.get('src') if img_tag else None
             if img_id and src:
-                # src is already full URL (Cloudinary), no need to resolve relative
                 image_urls[img_id] = src
         print(f"Found {len(image_urls)} image URLs: {list(image_urls.keys())}")  # Debug log
+        driver.quit()
         return image_urls
     except Exception as e:
-        print(f"Error fetching image URLs: {e}")
+        print(f"Error fetching image URLs with Selenium: {e}")
         return {}
 
 def extract_ebay_listings(image_url):
     """Perform OCR on an image URL and return parsed listing data."""
     try:
+        from io import BytesIO
+        from PIL import Image
+        import pytesseract
+        
         response = requests.get(image_url)
         response.raise_for_status()
         img = Image.open(BytesIO(response.content))
@@ -122,6 +140,7 @@ def update_listings():
     return len(new_listings) > 0  # True if changes made
 
 if __name__ == "__main__":
+    import requests  # Import here to avoid Selenium dependency
     updated = update_listings()
     if updated:
         print("Run committed changes to repo.")  # Handled by workflow

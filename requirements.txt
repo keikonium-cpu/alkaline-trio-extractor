@@ -2,3 +2,4 @@ requests
 pillow
 pytesseract
 beautifulsoup4
+selenium
