@@ -81,10 +81,7 @@ def fetch_all_image_urls(base_url):
         return {}
 
 def extract_ebay_listings(image_url):
-    """
-    Extract eBay listings with precise pattern matching.
-    Pattern: Sold/Ended Date → Title → Condition → Price → Seller
-    """
+    """Extract eBay sold listings following the specific pattern: Sold date → Title → Price."""
     try:
         import requests
         from io import BytesIO
@@ -95,153 +92,99 @@ def extract_ebay_listings(image_url):
         response.raise_for_status()
         img = Image.open(BytesIO(response.content))
         
-        # Extract text line by line
+        # Extract text with line-by-line data
         text = pytesseract.image_to_string(img)
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         
         print(f"  OCR extracted {len(lines)} raw lines")
         
         listings = []
-        i = 0
+        current = None
+        state = 'looking_for_sold'  # State machine: looking_for_sold → building_title → looking_for_price
         
-        while i < len(lines):
-            line = lines[i]
-            
-            # STEP 1: Find Sold/Ended date line
-            date_match = re.match(
-                r'^(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}',
-                line,
-                re.I
-            )
-            
-            if not date_match:
-                i += 1
+        for i, line in enumerate(lines):
+            # STATE 1: Looking for "Sold" date (green text, small)
+            if state == 'looking_for_sold':
+                # Must start with "Sold" and have month/day/year
+                sold_match = re.match(r'^Sold\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}', line, re.I)
+                if sold_match:
+                    # Save previous listing if complete
+                    if current and current.get('sold_date') and current.get('listing_title') and current.get('sold_price'):
+                        listings.append(current)
+                    
+                    # Start new listing
+                    current = {
+                        'sold_date': line,
+                        'listing_title': '',
+                        'sold_price': None,
+                        'seller': None
+                    }
+                    state = 'building_title'
+                    print(f"    Found sold date: {line}")
                 continue
             
-            # Start new listing
-            listing = {
-                'status': date_match.group(1).capitalize(),  # "Sold" or "Ended"
-                'date': line,
-                'listing_title': '',
-                'sold_price': None,
-                'seller': None
-            }
-            
-            print(f"    [{listing['status']}] {line}")
-            i += 1
-            
-            # STEP 2: Extract title (everything until condition or price)
-            title_lines = []
-            while i < len(lines):
-                current = lines[i]
-                
-                # Stop conditions
-                if re.match(r'^(Brand New|Pre-Owned|New with tags|New without tags|Open box|Used|For parts)$', current, re.I):
-                    print(f"      Condition found: {current}")
-                    i += 1
-                    break
-                
-                # Price found without condition
-                if re.match(r'^\$[\d,]+\.?\d{0,2}$', current):
-                    print(f"      Price without condition: {current}")
-                    break
-                
-                # Seller pattern (ends title)
-                if re.search(r'\d+%\s*positive', current, re.I):
-                    print(f"      Seller pattern found: {current}")
-                    break
-                
-                # Skip eBay UI elements
-                skip_patterns = [
-                    r'^(Buy It Now|or Best Offer|Make Offer|Auction|Bids?:)',
-                    r'^(Located in|Shipping|Delivery|Returns)',
-                    r'^(Authenticity Guarantee|Top Rated)',
-                    r'^\d+\s*(bid|watcher)',
-                    r'^Free',
-                    r'^Watch',
-                ]
-                
-                should_skip = False
-                for pattern in skip_patterns:
-                    if re.search(pattern, current, re.I):
-                        should_skip = True
-                        break
-                
-                if should_skip:
-                    i += 1
+            # STATE 2: Building title (large black text, contains "alkaline")
+            elif state == 'building_title':
+                # Skip non-title lines
+                if re.match(r'^(Brand New|Pre-Owned)$', line, re.I):
+                    state = 'looking_for_price'
                     continue
                 
-                # Valid title line
-                title_lines.append(current)
-                print(f"      Title: {current}")
-                i += 1
-            
-            listing['listing_title'] = ' '.join(title_lines).strip()
-            
-            # STEP 3: Find price (large font, starts with $)
-            while i < len(lines):
-                current = lines[i]
+                # Price found - stop title building
+                if re.match(r'^\$[\d,]+\.?\d{0,2}$', line):
+                    current['sold_price'] = line
+                    state = 'looking_for_sold'
+                    print(f"    Price: {line}")
+                    continue
                 
-                price_match = re.match(r'^\$[\d,]+\.?\d{0,2}$', current)
-                if price_match:
-                    listing['sold_price'] = current
-                    print(f"      Price: {current}")
-                    i += 1
-                    break
-                
-                i += 1
-                
-                # Safety: don't search too far
-                if i - date_match.start() > 20:
-                    break
-            
-            # STEP 4: Find seller (appears near price, before next listing)
-            # Seller format: username followed by rating (XX% positive)
-            # Located on same horizontal line as price or within next few lines
-            seller_search_start = i
-            while i < len(lines) and i < seller_search_start + 8:
-                current = lines[i]
-                
-                # Stop if we hit the next listing
-                if re.match(r'^(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', current, re.I):
-                    break
-                
-                # Pattern 1: seller name WITH rating on same line
-                # E.g., "username 98% positive (123)" or "username98% positive"
-                seller_match = re.search(
-                    r'^(.+?)\s*(\d+)%\s*(?:positive|feedback)',
-                    current,
-                    re.I
+                # Title line detection
+                # Must contain "alkaline" OR be a continuation of existing title
+                has_alkaline = 'alkaline' in line.lower()
+                is_continuation = (
+                    current['listing_title'] and  # Already have title start
+                    not line.startswith('$') and
+                    not re.match(r'^Sold\s+', line, re.I) and
+                    not re.match(r'^Ended\s+', line, re.I) and
+                    not re.match(r'^\d+%', line) and  # Skip ratings
+                    not re.match(r'^(Located|Free|Buy It Now|or Best|Shipping)', line, re.I)
                 )
                 
-                if seller_match:
-                    seller_name = seller_match.group(1).strip()
-                    # Remove common prefixes/suffixes
-                    seller_name = re.sub(r'^(by|from|seller:?)\s+', '', seller_name, flags=re.I)
-                    listing['seller'] = seller_name
-                    print(f"      Seller: {listing['seller']}")
-                    i += 1
-                    break
-                
-                # Pattern 2: seller name alone, rating on next line
-                # Must not be price, date, or common eBay text
-                if (not re.match(r'^\
+                if has_alkaline or is_continuation:
+                    # Add to title
+                    if current['listing_title']:
+                        current['listing_title'] += ' ' + line
+                    else:
+                        current['listing_title'] = line
+                    print(f"    Title fragment: {line}")
+                continue
             
-            # Only save valid listings
-            if listing['listing_title'] and listing['sold_price']:
-                # Clean title
-                title = listing['listing_title']
-                # Remove trailing junk
-                title = re.sub(r'\s+(Related:|Include description|View similar|Sell one like|Extra \d+%).*$', '', title, flags=re.I)
-                title = re.sub(r'\s+Direct from eBay.*$', '', title, flags=re.I)
-                listing['listing_title'] = title.strip()
-                
-                listings.append(listing)
-                print(f"    ✓ Valid listing: {listing['listing_title'][:60]}...")
-            else:
-                print(f"    ✗ Incomplete listing, skipping")
+            # STATE 3: Looking for price (large green text with $)
+            elif state == 'looking_for_price':
+                price_match = re.match(r'^\$[\d,]+\.?\d{0,2}$', line)
+                if price_match:
+                    current['sold_price'] = line
+                    state = 'looking_for_sold'
+                    print(f"    Price: {line}")
+                continue
         
-        print(f"  ✓ Extracted {len(listings)} valid listings")
+        # Don't forget the last listing
+        if current and current.get('sold_date') and current.get('listing_title') and current.get('sold_price'):
+            listings.append(current)
+        
+        # Clean up titles
+        for listing in listings:
+            title = listing['listing_title']
+            # Remove trailing junk patterns
+            title = re.sub(r'\s+(Related:|Include description|View similar|Sell one like|Extra \d+%|or Best Offer).*$', '', title, flags=re.I)
+            # Remove "Direct from eBay" and similar
+            title = re.sub(r'\s+Direct from eBay.*$', '', title, flags=re.I)
+            # Trim whitespace
+            listing['listing_title'] = title.strip()
+        
+        print(f"  ✓ Extracted {len(listings)} valid SOLD listings")
+        for idx, listing in enumerate(listings, 1):
+            print(f"    [{idx}] {listing['sold_date']} - {listing['listing_title'][:50]}... - {listing['sold_price']}")
+        
         return listings
         
     except Exception as e:
@@ -286,8 +229,7 @@ def update_listings():
             existing_ids.add(img_id)
         else:
             skipped_count += 1
-            if skipped_count % 10 == 0:  # Less verbose
-                print(f"[Skipped {skipped_count} already processed images...]")
+            print(f"[Skip {skipped_count}] Already processed: {img_id}")
     
     if new_listings:
         all_listings.extend(new_listings)
@@ -299,105 +241,6 @@ def update_listings():
     with open(output_json, 'w') as f:
         json.dump(all_listings, f, indent=4)
     
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, current) and 
-                    not re.match(r'^(Located|Shipping|Buy|or Best|Free|Watch|Bid)', current, re.I) and
-                    not re.match(r'^\d+\s*(bid|watcher)', current, re.I)):
-                    
-                    # Peek ahead for rating on next line
-                    if i + 1 < len(lines):
-                        next_line = lines[i + 1]
-                        if re.search(r'\d+%\s*(?:positive|feedback)', next_line, re.I):
-                            seller_name = current.strip()
-                            seller_name = re.sub(r'^(by|from|seller:?)\s+', '', seller_name, flags=re.I)
-                            listing['seller'] = seller_name
-                            print(f"      Seller (split): {listing['seller']}")
-                            i += 2
-                            break
-                
-                i += 1
-            
-            # Only save valid listings
-            if listing['listing_title'] and listing['sold_price']:
-                # Clean title
-                title = listing['listing_title']
-                # Remove trailing junk
-                title = re.sub(r'\s+(Related:|Include description|View similar|Sell one like|Extra \d+%).*$', '', title, flags=re.I)
-                title = re.sub(r'\s+Direct from eBay.*$', '', title, flags=re.I)
-                listing['listing_title'] = title.strip()
-                
-                listings.append(listing)
-                print(f"    ✓ Valid listing: {listing['listing_title'][:60]}...")
-            else:
-                print(f"    ✗ Incomplete listing, skipping")
-        
-        print(f"  ✓ Extracted {len(listings)} valid listings")
-        return listings
-        
-    except Exception as e:
-        print(f"  ✗ Error processing {image_url}: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:  # Less verbose
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
     return len(new_listings) > 0
 
 if __name__ == "__main__":
