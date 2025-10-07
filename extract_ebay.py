@@ -83,7 +83,7 @@ def fetch_all_image_urls(base_url):
         return {}
 
 def extract_ebay_listings(image_url):
-    """Perform OCR with improved text filtering."""
+    """Perform OCR with balanced text filtering."""
     try:
         import requests
         from io import BytesIO
@@ -94,50 +94,51 @@ def extract_ebay_listings(image_url):
         response.raise_for_status()
         img = Image.open(BytesIO(response.content))
         
-        # OCR with better configuration
-        custom_config = r'--oem 3 --psm 6'
-        text = pytesseract.image_to_string(img, config=custom_config)
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        text = pytesseract.image_to_string(img)
+        lines = [line.strip() for line in text.split('\n') if line.strip() and len(line.strip()) > 1]
         
-        print(f"OCR extracted {len(lines)} lines")
+        print(f"  OCR extracted {len(lines)} raw lines")
         
-        # Aggressive filtering for junk
+        # Light filtering - only remove obvious junk
         junk_patterns = [
-            re.compile(r'^(Free|Located|View|eBay|Buy|Ships|Shipping|Watching|Watchers|Seller|Top Rated).*', re.I),
-            re.compile(r'^\d+%?\s*\(\d+[KkMm]?\)$'),  # Ratings
-            re.compile(r'^\d{1,3}$'),  # Standalone numbers
-            re.compile(r'^(Brand New|Pre-Owned|New|Used|Condition).*', re.I),
-            re.compile(r'^(Related:|Include description|Local Pickup|Item Location).*', re.I),
-            re.compile(r'^\([0-9]+\)$'),  # (75), etc.
+            re.compile(r'^(Free shipping|Located in|View similar|Watching|Watchers|Top Rated|Best Match).*', re.I),
+            re.compile(r'^\d+%\s*\(\d+[KkMm]?\)$'),  # Pure ratings only
+            re.compile(r'^(Brand New|Pre-Owned|Condition):?\s*$', re.I),  # Only if standalone
             re.compile(r'^[A-Z]{2}$'),  # State codes like "CO"
-            re.compile(r'^Not Specified.*', re.I),
-            re.compile(r'^(nofx|rancid|bad religion)(?!.*alkaline)', re.I),  # Other bands unless with "alkaline"
         ]
         
         filtered_lines = []
         for line in lines:
-            is_junk = any(pat.match(line) for pat in junk_patterns)
-            if not is_junk:
-                filtered_lines.append(line)
+            # Skip if matches junk pattern
+            if any(pat.match(line) for pat in junk_patterns):
+                continue
+            # Skip very short lines (likely noise)
+            if len(line) < 3:
+                continue
+            filtered_lines.append(line)
         
-        print(f"Filtered to {len(filtered_lines)} clean lines")
+        print(f"  Filtered to {len(filtered_lines)} lines")
         
         listings = []
         current = None
+        expecting_title = False
         
-        for i, line in enumerate(filtered_lines):
+        for line in filtered_lines:
             # Detect new listing by "Sold" date
             sold_match = re.match(r'Sold\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}', line)
             
             if sold_match:
-                # Save previous listing if valid
-                if current and current.get('sold_date') and current.get('listing_title', '').strip() and current.get('sold_price'):
-                    # Clean up title
+                # Save previous listing if it has minimum required fields
+                if current and current.get('sold_date') and current.get('listing_title', '').strip():
+                    # Clean up title - remove common trailing junk
                     title = current['listing_title'].strip()
-                    # Remove trailing junk patterns
-                    title = re.sub(r'\s*(Related:|Include description|nofx|rancid).*$', '', title, flags=re.I)
+                    # Remove everything after common patterns that indicate end of title
+                    title = re.sub(r'\s+(Related:|Include description|Highly Rated).*$', '', title, flags=re.I)
                     current['listing_title'] = title
-                    listings.append(current)
+                    
+                    # Only add if has a price
+                    if current.get('sold_price'):
+                        listings.append(current)
                 
                 # Start new listing
                 current = {
@@ -146,45 +147,60 @@ def extract_ebay_listings(image_url):
                     'sold_price': None,
                     'seller': None
                 }
+                expecting_title = True
                 continue
             
             if current is None:
-                continue  # Haven't found first listing yet
-            
-            # Price detection (must be standalone)
-            price_match = re.match(r'^\$[\d,]+\.?\d{0,2}$', line)
-            if price_match and not current.get('sold_price'):
-                current['sold_price'] = line
                 continue
             
-            # Title detection: Must contain "alkaline" (case insensitive)
-            if 'alkaline' in line.lower():
-                # Don't add if it's a price or already has price
-                if not re.match(r'^\$', line):
+            # Price detection - must be clean $ format
+            price_match = re.match(r'^\$[\d,]+\.?\d{0,2}$', line)
+            if price_match:
+                if not current.get('sold_price'):
+                    current['sold_price'] = line
+                    expecting_title = False  # Price comes after title
+                continue
+            
+            # Title building - accumulate lines that look like titles
+            if expecting_title or not current.get('sold_price'):
+                # Title must contain "alkaline" OR be a continuation
+                has_alkaline = 'alkaline' in line.lower()
+                looks_like_title = (
+                    not line.startswith('$') and 
+                    not re.match(r'^\d+%', line) and
+                    not re.match(r'^(Seller|Sold by|Shipping)', line, re.I)
+                )
+                
+                if has_alkaline or (looks_like_title and current['listing_title']):
+                    # Append to title
                     if current['listing_title']:
                         current['listing_title'] += ' ' + line
                     else:
                         current['listing_title'] = line
-                continue
+                    continue
             
-            # Seller detection (username + rating pattern)
-            seller_match = re.match(r'^(\w+)\s+\d+%?\s*\(\d+[KkMm]?\)$', line)
-            if seller_match and not current.get('seller'):
-                current['seller'] = seller_match.group(1)
+            # Seller detection (name followed by rating)
+            seller_match = re.match(r'^(\w+)\s+\d+%\s*\(\d+[KkMm]?\)$', line)
+            if seller_match:
+                if not current.get('seller'):
+                    current['seller'] = seller_match.group(1)
                 continue
         
-        # Add final listing
+        # Don't forget the last listing
         if current and current.get('sold_date') and current.get('listing_title', '').strip() and current.get('sold_price'):
             title = current['listing_title'].strip()
-            title = re.sub(r'\s*(Related:|Include description|nofx|rancid).*$', '', title, flags=re.I)
+            title = re.sub(r'\s+(Related:|Include description|Highly Rated).*$', '', title, flags=re.I)
             current['listing_title'] = title
             listings.append(current)
         
-        print(f"Extracted {len(listings)} valid listings")
+        print(f"  ✓ Extracted {len(listings)} valid listings")
+        if len(listings) > 0:
+            print(f"    Sample: {listings[0]['listing_title'][:60]}...")
+        
         return listings
         
     except Exception as e:
-        print(f"Error processing {image_url}: {e}")
+        print(f"  ✗ Error processing {image_url}: {e}")
         return []
 
 def update_listings():
@@ -201,17 +217,19 @@ def update_listings():
             all_listings = data
             existing_ids = {item.get('image_id', '') for item in data}
     
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs")
+    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
     
     # Fetch ALL image URLs from all pages
     image_urls = fetch_all_image_urls(base_url)
-    print(f"Found {len(image_urls)} total images across all pages")
+    print(f"\nFound {len(image_urls)} total images across all pages\n")
     
     new_listings = []
+    processed_count = 0
     
     for img_id, img_url in image_urls.items():
         if img_id not in existing_ids:
-            print(f"\n--- Processing NEW image: {img_id} ---")
+            processed_count += 1
+            print(f"[{processed_count}/{len(image_urls)}] Processing: {img_id}")
             listings = extract_ebay_listings(img_url)
             for listing in listings:
                 listing['image_id'] = img_id
@@ -219,7 +237,7 @@ def update_listings():
                 new_listings.append(listing)
             existing_ids.add(img_id)
         else:
-            print(f"Skipping existing image: {img_id}")
+            print(f"Skipping existing: {img_id}")
     
     if new_listings:
         all_listings.extend(new_listings)
