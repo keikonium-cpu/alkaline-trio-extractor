@@ -81,10 +81,7 @@ def fetch_all_image_urls(base_url):
         return {}
 
 def extract_ebay_listings(image_url):
-    """
-    Extract eBay listings with precise pattern matching.
-    Pattern: Sold/Ended Date -> Title -> Condition -> Price -> Seller
-    """
+    """Extract eBay listings with image preprocessing and improved pattern matching."""
     try:
         import requests
         from io import BytesIO
@@ -95,23 +92,15 @@ def extract_ebay_listings(image_url):
         response.raise_for_status()
         img = Image.open(BytesIO(response.content))
         
-        # IMAGE PREPROCESSING for better OCR accuracy
-        # Convert to grayscale
+        # IMAGE PREPROCESSING
         img = img.convert('L')
-        
-        # Increase contrast
         enhancer = ImageEnhance.Contrast(img)
         img = enhancer.enhance(2.0)
-        
-        # Increase sharpness
         enhancer = ImageEnhance.Sharpness(img)
         img = enhancer.enhance(1.5)
-        
-        # Apply slight blur to reduce noise, then sharpen
         img = img.filter(ImageFilter.MedianFilter(size=3))
         
-        # Extract text line by line with better config
-        custom_config = r'--oem 3 --psm 6'  # Assume uniform block of text
+        custom_config = r'--oem 3 --psm 6'
         text = pytesseract.image_to_string(img, config=custom_config)
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         
@@ -123,7 +112,6 @@ def extract_ebay_listings(image_url):
         while i < len(lines):
             line = lines[i]
             
-            # STEP 1: Find Sold/Ended date line
             date_match = re.match(
                 r'^(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}',
                 line,
@@ -134,7 +122,6 @@ def extract_ebay_listings(image_url):
                 i += 1
                 continue
             
-            # Start new listing
             listing = {
                 'status': date_match.group(1).capitalize(),
                 'date': line,
@@ -146,151 +133,28 @@ def extract_ebay_listings(image_url):
             print(f"    [{listing['status']}] {line}")
             i += 1
             
-            # STEP 2: Extract title (everything until condition or price)
+            # EXTRACT TITLE
             title_lines = []
-            max_title_search = 15  # Don't search too far
+            max_title_search = 15
             title_start_idx = i
             
             while i < len(lines) and (i - title_start_idx) < max_title_search:
                 current = lines[i]
                 
-                # Stop if we hit a clear price
-                if re.match(r'^\$\d+[\d,]*\.?\d{0,2}$
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, current):
+                price_pattern = r'^\$\d+[\d,]*\.?\d{0,2}$'
+                if re.match(price_pattern, current):
                     print(f"      Found price, stopping title: {current}")
                     break
                 
-                # Stop at condition keywords (standalone)
-                if re.match(r'^(Brand New|Pre-Owned|New with tags|New without tags|Open box|Used|For parts)
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, current, re.I):
+                if re.match(r'^(Brand New|Pre-Owned|New with tags|New without tags|Open box|Used|For parts)$', current, re.I):
                     print(f"      Condition found: {current}")
                     i += 1
                     break
                 
-                # Stop at seller pattern
                 if re.search(r'\d+\.?\d*%\s*positive', current, re.I):
                     print(f"      Seller pattern found: {current}")
                     break
                 
-                # Skip obvious eBay UI junk
                 skip_patterns = [
                     r'^(Buy It Now|or Best Offer|Make Offer|Auction|Bids?:)',
                     r'^(Located in|Shipping|Delivery|Returns)',
@@ -299,73 +163,13 @@ if __name__ == "__main__":
                     r'^(Free|Watch|Save)',
                     r'^(More \+|Extra \d+%)',
                     r'^(Item Location|Default|Within)',
-                    r'^\$\d+\.\d{2}\s+to\s+\
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-,  # Price range slider
+                    r'^\$\d+\.\d{2}\s+to\s+\$',
                     r'^Available inventory',
                     r'^Scratch Free',
                     r'product rating',
-                    r'^\{.*\}',  # OCR artifacts
-                    r'^@\s*\w+',  # @ symbols
-                    r'^O\s+Within',  # Radio buttons
+                    r'^\{.*\}',
+                    r'^@\s*\w+',
+                    r'^O\s+Within',
                 ]
                 
                 should_skip = False
@@ -378,70 +182,8 @@ if __name__ == "__main__":
                     i += 1
                     continue
                 
-                # Check if line contains a price embedded (e.g., "Entertainment Memorabilia $24.99")
-                embedded_price = re.search(r'\$\d+[\d,]*\.?\d{0,2}
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, current)
+                embedded_price = re.search(r'\$\d+[\d,]*\.?\d{0,2}$', current)
                 if embedded_price:
-                    # Split: text before price is title, price goes to next step
                     title_part = current[:embedded_price.start()].strip()
                     if title_part and len(title_part) > 3:
                         title_lines.append(title_part)
@@ -450,8 +192,7 @@ if __name__ == "__main__":
                     i += 1
                     break
                 
-                # Valid title line
-                if len(current) > 2:  # Ignore very short junk
+                if len(current) > 2:
                     title_lines.append(current)
                     print(f"      Title: {current}")
                 
@@ -459,17 +200,15 @@ if __name__ == "__main__":
             
             listing['listing_title'] = ' '.join(title_lines).strip()
             
-            # STEP 3: Find price - search more aggressively
+            # EXTRACT PRICE
             price_search_start = i
             max_price_search = 10
             
             while i < len(lines) and (i - price_search_start) < max_price_search:
                 current = lines[i]
                 
-                # Look for price pattern (more lenient)
                 price_match = re.search(r'\$(\d+[\d,]*\.?\d{0,2})', current)
                 if price_match:
-                    # Extract just the price
                     listing['sold_price'] = f"${price_match.group(1)}"
                     print(f"      Price: {listing['sold_price']}")
                     i += 1
@@ -477,16 +216,14 @@ if __name__ == "__main__":
                 
                 i += 1
             
-            # STEP 4: Find seller
+            # EXTRACT SELLER
             seller_search_start = i
             while i < len(lines) and i < seller_search_start + 8:
                 current = lines[i]
                 
-                # Stop if next listing
                 if re.match(r'^(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', current, re.I):
                     break
                 
-                # Pattern 1: seller WITH rating
                 seller_match = re.search(
                     r'^(.+?)\s*(\d+\.?\d*)%\s*(?:positive|feedback)',
                     current,
@@ -495,138 +232,16 @@ if __name__ == "__main__":
                 
                 if seller_match:
                     seller_name = seller_match.group(1).strip()
-                    # Clean up common prefixes and OCR artifacts
                     seller_name = re.sub(r'^(by|from|seller:?|ts)\s+', '', seller_name, flags=re.I)
-                    seller_name = re.sub(r'\s+\d+
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, '', seller_name)  # Remove trailing numbers
+                    seller_name = re.sub(r'\s+\d+$', '', seller_name)
                     if len(seller_name) > 2:
                         listing['seller'] = seller_name
                         print(f"      Seller: {listing['seller']}")
                     i += 1
                     break
                 
-                # Pattern 2: seller name, rating on next line
                 current_clean = re.sub(r'^(by|from|seller:?|ts)\s+', '', current, flags=re.I)
-                if (not re.match(r'^\
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, current) and 
+                if (not re.match(r'^\$', current) and 
                     len(current_clean) > 2 and
                     not re.match(r'^(Located|Shipping|Buy|or Best|Free|Watch|Bid)', current, re.I)):
                     
@@ -640,133 +255,12 @@ if __name__ == "__main__":
                 
                 i += 1
             
-            # Only save valid listings (must have title and price)
+            # SAVE VALID LISTINGS
             if listing['listing_title'] and listing['sold_price']:
-                # Final title cleanup
                 title = listing['listing_title']
-                title = re.sub(r'\s+(Related:|Include description|View similar|Sell one like).*
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, '', title, flags=re.I)
-                title = re.sub(r'\s+Direct from eBay.*
-
-def update_listings():
-    """Main function: Fetch all pages, process new images, update JSON."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    # Load existing listings
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
-    
-    # Fetch ALL image URLs from all pages
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} total images across all pages\n")
-    
-    new_listings = []
-    processed_count = 0
-    skipped_count = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed_count += 1
-            print(f"[{processed_count}] Processing NEW: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped_count += 1
-            if skipped_count % 10 == 0:
-                print(f"[Skipped {skipped_count} already processed images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings to add.")
-    
-    # Save JSON
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, '', title, flags=re.I)
-                title = re.sub(r'\s{2,}', ' ', title)  # Collapse multiple spaces
+                title = re.sub(r'\s+(Related:|Include description|View similar|Sell one like).*$', '', title, flags=re.I)
+                title = re.sub(r'\s+Direct from eBay.*$', '', title, flags=re.I)
+                title = re.sub(r'\s{2,}', ' ', title)
                 listing['listing_title'] = title.strip()
                 
                 listings.append(listing)
@@ -793,7 +287,6 @@ def update_listings():
     base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
     output_json = 'listings.json'
     
-    # Load existing listings
     existing_ids = set()
     all_listings = []
     if os.path.exists(output_json):
@@ -804,7 +297,6 @@ def update_listings():
     
     print(f"Loaded {len(all_listings)} existing listings with {len(existing_ids)} unique image IDs\n")
     
-    # Fetch ALL image URLs from all pages
     image_urls = fetch_all_image_urls(base_url)
     print(f"\nFound {len(image_urls)} total images across all pages\n")
     
@@ -833,7 +325,6 @@ def update_listings():
     else:
         print("\n✓ No new listings to add.")
     
-    # Save JSON
     with open(output_json, 'w') as f:
         json.dump(all_listings, f, indent=4)
     
