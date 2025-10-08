@@ -78,7 +78,7 @@ def fetch_all_image_urls(base_url):
         return {}
 
 def extract_ebay_listings(image_url):
-    """Extract eBay listings with image cropping only."""
+    """Extract eBay listings from cropped image."""
     try:
         import requests
         from io import BytesIO
@@ -89,15 +89,14 @@ def extract_ebay_listings(image_url):
         response.raise_for_status()
         img = Image.open(BytesIO(response.content))
         
-        # Crop to relevant area (remove sidebar and header)
+        # Crop to listing area (remove sidebar and header)
         width, height = img.size
         img = img.crop((500, 330, width, height))
         
-        # No preprocessing - just run OCR
         text = pytesseract.image_to_string(img)
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         
-        print(f"  OCR extracted {len(lines)} lines")
+        print(f"  OCR: {len(lines)} lines")
         
         listings = []
         i = 0
@@ -106,13 +105,13 @@ def extract_ebay_listings(image_url):
             line = lines[i]
             
             # Find date
-            date_match = re.match(r'^(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}', line, re.I)
-            if not date_match:
+            dm = re.match(r'^(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}', line, re.I)
+            if not dm:
                 i += 1
                 continue
             
             listing = {
-                'status': date_match.group(1).capitalize(),
+                'status': dm.group(1).capitalize(),
                 'date': line,
                 'listing_title': '',
                 'sold_price': None,
@@ -125,84 +124,26 @@ def extract_ebay_listings(image_url):
             # Extract title
             title_parts = []
             while i < len(lines) and len(title_parts) < 5:
-                current = lines[i]
+                cur = lines[i]
                 
-                # Stop conditions
-                if re.match(r'^(Brand New|Pre-Owned|New with|Open box|Used|For parts|Not Specified)
-
-def update_listings():
-    """Main function."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings\n")
-    
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} images\n")
-    
-    new_listings = []
-    processed = 0
-    skipped = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed += 1
-            print(f"[{processed}] Processing: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped += 1
-            if skipped % 10 == 0:
-                print(f"[Skipped {skipped} images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings")
-    
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, current, re.I):
-                    print(f"      Condition: {current}")
+                # Stop at condition
+                if re.match(r'^(Brand New|Pre-Owned|New with tags|Open box|Used|For parts)$', cur, re.I):
+                    print(f"      Condition: {cur}")
                     i += 1
                     break
-                if re.match(r'^\$\d+', current):
-                    print(f"      Price found: {current}")
+                # Stop at price
+                if re.match(r'^\$\d+', cur):
+                    print(f"      Price line: {cur}")
                     break
-                if re.match(r'^\d+\s*(bid|watcher)', current, re.I):
-                    i += 1
-                    continue
-                if re.match(r'^(or Best|Buy It Now|Located|View similar|Sell one|Free|Watch|\+\$)', current, re.I):
+                # Skip junk
+                if re.match(r'^(\d+\s*(bid|watcher)|or Best|Buy It Now|Located|View|Sell|Free|Watch|\+\$)', cur, re.I):
                     i += 1
                     continue
                 
                 # Valid title
-                if len(current) > 2 and re.search(r'[a-zA-Z]{3,}', current):
-                    title_parts.append(current)
-                    print(f"      Title: {current}")
+                if len(cur) > 2 and re.search(r'[a-zA-Z]{3,}', cur):
+                    title_parts.append(cur)
+                    print(f"      Title: {cur}")
                 
                 i += 1
             
@@ -212,12 +153,10 @@ if __name__ == "__main__":
             for _ in range(8):
                 if i >= len(lines):
                     break
-                current = lines[i]
-                
-                # Look for price
-                price_match = re.search(r'\$(\d+[\d,]*\.?\d{0,2})', current)
-                if price_match:
-                    listing['sold_price'] = f"${price_match.group(1)}"
+                cur = lines[i]
+                pm = re.search(r'\$(\d+[\d,]*\.?\d{0,2})', cur)
+                if pm:
+                    listing['sold_price'] = f"${pm.group(1)}"
                     print(f"      Price: {listing['sold_price']}")
                     i += 1
                     break
@@ -227,78 +166,21 @@ if __name__ == "__main__":
             for _ in range(6):
                 if i >= len(lines):
                     break
-                current = lines[i]
+                cur = lines[i]
                 
-                if re.match(r'^(Sold|Ended)\s+', current, re.I):
+                if re.match(r'^(Sold|Ended)\s+', cur, re.I):
                     break
                 
-                seller_match = re.search(r'^([a-zA-Z0-9_-]+)\s+\d+\.?\d*%', current, re.I)
-                if seller_match:
-                    listing['seller'] = seller_match.group(1)
+                sm = re.search(r'^([a-zA-Z0-9_-]+)\s+\d+\.?\d*%', cur, re.I)
+                if sm:
+                    listing['seller'] = sm.group(1)
                     print(f"      Seller: {listing['seller']}")
                     i += 1
                     break
                 
-                if re.match(r'^[a-zA-Z0-9_-]+
-
-def update_listings():
-    """Main function."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings\n")
-    
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} images\n")
-    
-    new_listings = []
-    processed = 0
-    skipped = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed += 1
-            print(f"[{processed}] Processing: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped += 1
-            if skipped % 10 == 0:
-                print(f"[Skipped {skipped} images...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings")
-    
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved to {output_json}")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Changes ready for commit")
-    else:
-        print("\n✓ No changes to commit")
-, current) and i + 1 < len(lines):
+                if re.match(r'^[a-zA-Z0-9_-]+$', cur) and i + 1 < len(lines):
                     if re.search(r'\d+\.?\d*%', lines[i + 1]):
-                        listing['seller'] = current
+                        listing['seller'] = cur
                         print(f"      Seller: {listing['seller']}")
                         i += 2
                         break
@@ -309,16 +191,16 @@ if __name__ == "__main__":
             if listing['listing_title'] and listing['sold_price']:
                 listing['listing_title'] = re.sub(r'\s{2,}', ' ', listing['listing_title']).strip()
                 listings.append(listing)
-                print(f"    ✓ Saved: {listing['listing_title'][:40]}... ${listing['sold_price']}")
+                print(f"    ✓ Saved")
             else:
                 missing = []
                 if not listing['listing_title']:
                     missing.append('title')
                 if not listing['sold_price']:
                     missing.append('price')
-                print(f"    ✗ Skipped - missing: {', '.join(missing)}")
+                print(f"    ✗ Missing: {', '.join(missing)}")
         
-        print(f"  ✓ Extracted {len(listings)} listings")
+        print(f"  ✓ Found {len(listings)} listings")
         return listings
         
     except Exception as e:
@@ -362,23 +244,23 @@ def update_listings():
         else:
             skipped += 1
             if skipped % 10 == 0:
-                print(f"[Skipped {skipped} images...]")
+                print(f"[Skipped {skipped}...]")
     
     if new_listings:
         all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new listings. Total: {len(all_listings)}")
+        print(f"\n✓ Added {len(new_listings)} new. Total: {len(all_listings)}")
     else:
         print("\n✓ No new listings")
     
     with open(output_json, 'w') as f:
         json.dump(all_listings, f, indent=4)
     
-    print(f"✓ Saved to {output_json}")
+    print(f"✓ Saved")
     return len(new_listings) > 0
 
 if __name__ == "__main__":
     updated = update_listings()
     if updated:
-        print("\n✓ Changes ready for commit")
+        print("\n✓ Ready for commit")
     else:
-        print("\n✓ No changes to commit")
+        print("\n✓ No changes")
