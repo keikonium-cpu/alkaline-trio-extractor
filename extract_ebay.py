@@ -155,7 +155,7 @@ def extract_ebay_listings(image_url):
                 current = lines[i]
                 
                 # Stop if we hit a clear price
-                if re.match(r'^\$\d+[\d,]*\.?\d{0,2}
+                if re.match(r'^\$\d+[\d,]*\.?\d{0,2}$
 
 def update_listings():
     """Main function: Fetch all pages, process new images, update JSON."""
