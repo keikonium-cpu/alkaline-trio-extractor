@@ -7,260 +7,169 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
 import time
 
-def fetch_all_image_urls(base_url):
-    """Fetch image URLs from ALL pages of the gallery."""
+def extract_ebay_listings_direct():
+    """Extract listings directly from eBay search results using Selenium."""
     try:
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         driver = webdriver.Chrome(options=chrome_options)
         
-        all_image_urls = {}
-        page = 1
+        all_listings = []
         
-        while True:
-            url = f"{base_url}?page={page}"
-            print(f"Loading page {page}: {url}")
+        # Start with first page
+        base_url = "https://www.ebay.com/sch/i.html?_nkw=alkaline+trio&LH_Complete=1&LH_Sold=1&_ipg=240&_pgn="
+        
+        for page in range(1, 6):  # Get first 5 pages (up to 1200 listings)
+            url = base_url + str(page)
+            print(f"\nFetching page {page}: {url}")
             driver.get(url)
+            time.sleep(3)
             
             try:
-                wait = WebDriverWait(driver, 30)
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".gallery-item")))
-                time.sleep(2)
+                # Wait for listings to load
+                wait = WebDriverWait(driver, 15)
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".s-item")))
                 
-                html = driver.page_source
-                soup = BeautifulSoup(html, 'html.parser')
-                gallery_elements = soup.find_all('div', class_='gallery-item')
+                # Get all listing items
+                items = driver.find_elements(By.CSS_SELECTOR, ".s-item")
+                print(f"Found {len(items)} items on page {page}")
                 
-                if len(gallery_elements) == 0:
-                    print(f"No gallery items found on page {page}. Stopping.")
-                    break
-                
-                page_images = {}
-                for gallery in gallery_elements:
-                    img_id = gallery.get('data-id')
-                    img_tag = gallery.find('img')
-                    src = img_tag.get('src') if img_tag else None
-                    if img_id and src:
-                        page_images[img_id] = src
-                
-                print(f"Page {page}: Found {len(page_images)} images")
-                all_image_urls.update(page_images)
-                
-                pagination = soup.find('div', id='pagination')
-                if pagination:
-                    next_page_link = pagination.find('a', {'data-page': str(page + 1)})
-                    if not next_page_link:
-                        break
-                else:
-                    break
-                
-                page += 1
+                for item in items:
+                    try:
+                        # Skip the header item
+                        if "s-item--header" in item.get_attribute("class"):
+                            continue
+                        
+                        listing = {
+                            'status': None,
+                            'date': None,
+                            'listing_title': None,
+                            'sold_price': None,
+                            'seller': None,
+                            'processed_at': datetime.now().isoformat()
+                        }
+                        
+                        # Extract title
+                        try:
+                            title_elem = item.find_element(By.CSS_SELECTOR, ".s-item__title")
+                            listing['listing_title'] = title_elem.text.strip()
+                        except:
+                            continue
+                        
+                        # Extract price
+                        try:
+                            price_elem = item.find_element(By.CSS_SELECTOR, ".s-item__price")
+                            price_text = price_elem.text.strip()
+                            # Clean price (take first price if range)
+                            price_match = re.search(r'\$[\d,]+\.?\d{0,2}', price_text)
+                            if price_match:
+                                listing['sold_price'] = price_match.group()
+                        except:
+                            pass
+                        
+                        # Extract seller
+                        try:
+                            seller_elem = item.find_element(By.CSS_SELECTOR, ".s-item__seller-info-text")
+                            seller_text = seller_elem.text.strip()
+                            listing['seller'] = seller_text
+                        except:
+                            pass
+                        
+                        # Extract status and date from subtitle
+                        try:
+                            subtitle_elem = item.find_element(By.CSS_SELECTOR, ".s-item__subtitle, .POSITIVE")
+                            subtitle_text = subtitle_elem.text.strip()
+                            
+                            # Look for "Sold" or "Ended" with date
+                            date_match = re.search(r'(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}', subtitle_text, re.I)
+                            if date_match:
+                                listing['status'] = date_match.group(1).capitalize()
+                                listing['date'] = date_match.group(0)
+                        except:
+                            pass
+                        
+                        # Default status to Sold if not found
+                        if not listing['status']:
+                            listing['status'] = 'Sold'
+                        
+                        # Only save if we have minimum required data
+                        if listing['listing_title'] and listing['sold_price']:
+                            all_listings.append(listing)
+                            print(f"  ✓ {listing['listing_title'][:50]}... | {listing['sold_price']}")
+                        
+                    except Exception as e:
+                        print(f"  ✗ Error parsing item: {e}")
+                        continue
                 
             except Exception as e:
                 print(f"Error on page {page}: {e}")
                 break
         
         driver.quit()
-        print(f"Total images collected: {len(all_image_urls)}")
-        return all_image_urls
+        print(f"\n✓ Extracted {len(all_listings)} total listings")
+        return all_listings
         
     except Exception as e:
-        print(f"Error fetching image URLs: {e}")
+        print(f"✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
         try:
             driver.quit()
         except:
             pass
-        return {}
-
-def extract_ebay_listings(image_url):
-    """Extract eBay listings from cropped image."""
-    try:
-        import requests
-        from io import BytesIO
-        from PIL import Image
-        import pytesseract
-        
-        response = requests.get(image_url)
-        response.raise_for_status()
-        img = Image.open(BytesIO(response.content))
-        
-        # Crop to listing area (remove sidebar and header)
-        width, height = img.size
-        img = img.crop((500, 330, width, height))
-        
-        text = pytesseract.image_to_string(img)
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        
-        print(f"  OCR: {len(lines)} lines")
-        
-        listings = []
-        i = 0
-        
-        while i < len(lines):
-            line = lines[i]
-            
-            # Find date
-            dm = re.match(r'^(Sold|Ended)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}', line, re.I)
-            if not dm:
-                i += 1
-                continue
-            
-            listing = {
-                'status': dm.group(1).capitalize(),
-                'date': line,
-                'listing_title': '',
-                'sold_price': None,
-                'seller': None
-            }
-            
-            print(f"    [{listing['status']}] {line}")
-            i += 1
-            
-            # Extract title
-            title_parts = []
-            while i < len(lines) and len(title_parts) < 5:
-                cur = lines[i]
-                
-                # Stop at condition
-                if re.match(r'^(Brand New|Pre-Owned|New with tags|Open box|Used|For parts)$', cur, re.I):
-                    print(f"      Condition: {cur}")
-                    i += 1
-                    break
-                # Stop at price
-                if re.match(r'^\$\d+', cur):
-                    print(f"      Price line: {cur}")
-                    break
-                # Skip junk
-                if re.match(r'^(\d+\s*(bid|watcher)|or Best|Buy It Now|Located|View|Sell|Free|Watch|\+\$)', cur, re.I):
-                    i += 1
-                    continue
-                
-                # Valid title
-                if len(cur) > 2 and re.search(r'[a-zA-Z]{3,}', cur):
-                    title_parts.append(cur)
-                    print(f"      Title: {cur}")
-                
-                i += 1
-            
-            listing['listing_title'] = ' '.join(title_parts).strip()
-            
-            # Extract price
-            for _ in range(8):
-                if i >= len(lines):
-                    break
-                cur = lines[i]
-                pm = re.search(r'\$(\d+[\d,]*\.?\d{0,2})', cur)
-                if pm:
-                    listing['sold_price'] = f"${pm.group(1)}"
-                    print(f"      Price: {listing['sold_price']}")
-                    i += 1
-                    break
-                i += 1
-            
-            # Extract seller
-            for _ in range(6):
-                if i >= len(lines):
-                    break
-                cur = lines[i]
-                
-                if re.match(r'^(Sold|Ended)\s+', cur, re.I):
-                    break
-                
-                sm = re.search(r'^([a-zA-Z0-9_-]+)\s+\d+\.?\d*%', cur, re.I)
-                if sm:
-                    listing['seller'] = sm.group(1)
-                    print(f"      Seller: {listing['seller']}")
-                    i += 1
-                    break
-                
-                if re.match(r'^[a-zA-Z0-9_-]+$', cur) and i + 1 < len(lines):
-                    if re.search(r'\d+\.?\d*%', lines[i + 1]):
-                        listing['seller'] = cur
-                        print(f"      Seller: {listing['seller']}")
-                        i += 2
-                        break
-                
-                i += 1
-            
-            # Save if valid
-            if listing['listing_title'] and listing['sold_price']:
-                listing['listing_title'] = re.sub(r'\s{2,}', ' ', listing['listing_title']).strip()
-                listings.append(listing)
-                print(f"    ✓ Saved")
-            else:
-                missing = []
-                if not listing['listing_title']:
-                    missing.append('title')
-                if not listing['sold_price']:
-                    missing.append('price')
-                print(f"    ✗ Missing: {', '.join(missing)}")
-        
-        print(f"  ✓ Found {len(listings)} listings")
-        return listings
-        
-    except Exception as e:
-        print(f"  ✗ Error: {e}")
-        import traceback
-        traceback.print_exc()
         return []
 
 def update_listings():
-    """Main function."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
+    """Main function - extract from eBay directly."""
     output_json = 'listings.json'
     
-    existing_ids = set()
-    all_listings = []
+    # Load existing listings
+    existing_listings = []
     if os.path.exists(output_json):
         with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
+            existing_listings = json.load(f)
     
-    print(f"Loaded {len(all_listings)} existing listings\n")
+    print(f"Loaded {len(existing_listings)} existing listings\n")
     
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} images\n")
+    # Extract new listings
+    new_listings = extract_ebay_listings_direct()
     
-    new_listings = []
-    processed = 0
-    skipped = 0
+    if not new_listings:
+        print("No new listings extracted")
+        return False
     
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed += 1
-            print(f"[{processed}] Processing: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped += 1
-            if skipped % 10 == 0:
-                print(f"[Skipped {skipped}...]")
+    # Merge with existing (avoid duplicates by title+price)
+    existing_keys = {(l.get('listing_title'), l.get('sold_price')) for l in existing_listings}
+    unique_new = []
     
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new. Total: {len(all_listings)}")
+    for listing in new_listings:
+        key = (listing.get('listing_title'), listing.get('sold_price'))
+        if key not in existing_keys:
+            unique_new.append(listing)
+            existing_keys.add(key)
+    
+    if unique_new:
+        all_listings = existing_listings + unique_new
+        print(f"\n✓ Added {len(unique_new)} new listings. Total: {len(all_listings)}")
     else:
-        print("\n✓ No new listings")
+        all_listings = existing_listings
+        print(f"\n✓ No new unique listings found")
     
+    # Save
     with open(output_json, 'w') as f:
         json.dump(all_listings, f, indent=4)
     
-    print(f"✓ Saved")
-    return len(new_listings) > 0
+    print(f"✓ Saved to {output_json}")
+    return len(unique_new) > 0
 
 if __name__ == "__main__":
     updated = update_listings()
     if updated:
-        print("\n✓ Ready for commit")
+        print("\n✓ Changes ready for commit")
     else:
-        print("\n✓ No changes")
+        print("\n✓ No changes to commit")
