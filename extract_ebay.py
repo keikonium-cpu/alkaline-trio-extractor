@@ -162,7 +162,7 @@ def extract_ebay_listings(image_url):
                     break
                 i += 1
             
-            # Extract seller - look for pattern before percentage
+            # Extract seller
             for _ in range(8):
                 if i >= len(lines):
                     break
@@ -173,7 +173,6 @@ def extract_ebay_listings(image_url):
                     break
                 
                 # Pattern 1: username with percentage on same line
-                # Look for word characters followed by space and percentage
                 sm = re.search(r'([a-zA-Z0-9_-]+)\s+(\d+\.?\d*)\s*%', cur, re.I)
                 if sm:
                     seller = sm.group(1)
@@ -186,87 +185,8 @@ def extract_ebay_listings(image_url):
                         break
                 
                 # Pattern 2: username on one line, percentage on next
-                # Must be alphanumeric with underscores/dashes
-                if re.match(r'^[a-zA-Z][a-zA-Z0-9_-]{2,}
-            
-            # Save if valid
-            if listing['listing_title'] and listing['sold_price']:
-                listing['listing_title'] = re.sub(r'\s{2,}', ' ', listing['listing_title']).strip()
-                listings.append(listing)
-                print(f"    ✓ Saved")
-            else:
-                missing = []
-                if not listing['listing_title']:
-                    missing.append('title')
-                if not listing['sold_price']:
-                    missing.append('price')
-                print(f"    ✗ Missing: {', '.join(missing)}")
-        
-        print(f"  ✓ Found {len(listings)} listings")
-        return listings
-        
-    except Exception as e:
-        print(f"  ✗ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-
-def update_listings():
-    """Main function."""
-    base_url = 'http://www.alkalinetrioarchive.com/screenshots.html'
-    output_json = 'listings.json'
-    
-    existing_ids = set()
-    all_listings = []
-    if os.path.exists(output_json):
-        with open(output_json, 'r') as f:
-            data = json.load(f)
-            all_listings = data
-            existing_ids = {item.get('image_id', '') for item in data}
-    
-    print(f"Loaded {len(all_listings)} existing listings\n")
-    
-    image_urls = fetch_all_image_urls(base_url)
-    print(f"\nFound {len(image_urls)} images\n")
-    
-    new_listings = []
-    processed = 0
-    skipped = 0
-    
-    for img_id, img_url in image_urls.items():
-        if img_id not in existing_ids:
-            processed += 1
-            print(f"[{processed}] Processing: {img_id}")
-            listings = extract_ebay_listings(img_url)
-            for listing in listings:
-                listing['image_id'] = img_id
-                listing['processed_at'] = datetime.now().isoformat()
-                new_listings.append(listing)
-            existing_ids.add(img_id)
-        else:
-            skipped += 1
-            if skipped % 10 == 0:
-                print(f"[Skipped {skipped}...]")
-    
-    if new_listings:
-        all_listings.extend(new_listings)
-        print(f"\n✓ Added {len(new_listings)} new. Total: {len(all_listings)}")
-    else:
-        print("\n✓ No new listings")
-    
-    with open(output_json, 'w') as f:
-        json.dump(all_listings, f, indent=4)
-    
-    print(f"✓ Saved")
-    return len(new_listings) > 0
-
-if __name__ == "__main__":
-    updated = update_listings()
-    if updated:
-        print("\n✓ Ready for commit")
-    else:
-        print("\n✓ No changes")
-, cur):
+                username_pattern = r'^[a-zA-Z][a-zA-Z0-9_-]{2,}$'
+                if re.match(username_pattern, cur):
                     if i + 1 < len(lines):
                         next_line = lines[i + 1]
                         if re.search(r'^\d+\.?\d*\s*%', next_line):
@@ -306,11 +226,16 @@ def update_listings():
     
     existing_ids = set()
     all_listings = []
+    existing_combos = set()
+    
     if os.path.exists(output_json):
         with open(output_json, 'r') as f:
             data = json.load(f)
             all_listings = data
             existing_ids = {item.get('image_id', '') for item in data}
+            for item in data:
+                combo = f"{item.get('listing_title', '')}|{item.get('sold_price', '')}"
+                existing_combos.add(combo)
     
     print(f"Loaded {len(all_listings)} existing listings\n")
     
@@ -320,6 +245,7 @@ def update_listings():
     new_listings = []
     processed = 0
     skipped = 0
+    duplicates = 0
     
     for img_id, img_url in image_urls.items():
         if img_id not in existing_ids:
@@ -327,9 +253,16 @@ def update_listings():
             print(f"[{processed}] Processing: {img_id}")
             listings = extract_ebay_listings(img_url)
             for listing in listings:
+                combo = f"{listing['listing_title']}|{listing['sold_price']}"
+                if combo in existing_combos:
+                    duplicates += 1
+                    print(f"    ⚠ Duplicate skipped")
+                    continue
+                
                 listing['image_id'] = img_id
                 listing['processed_at'] = datetime.now().isoformat()
                 new_listings.append(listing)
+                existing_combos.add(combo)
             existing_ids.add(img_id)
         else:
             skipped += 1
@@ -339,8 +272,12 @@ def update_listings():
     if new_listings:
         all_listings.extend(new_listings)
         print(f"\n✓ Added {len(new_listings)} new. Total: {len(all_listings)}")
+        if duplicates > 0:
+            print(f"  Skipped {duplicates} duplicates")
     else:
         print("\n✓ No new listings")
+        if duplicates > 0:
+            print(f"  Skipped {duplicates} duplicates")
     
     with open(output_json, 'w') as f:
         json.dump(all_listings, f, indent=4)
