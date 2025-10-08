@@ -1,1 +1,29 @@
-[]
+[
+    {
+        "status": "Ended",
+        "date": "Ended Oct 7, 2025",
+        "listing_title": "Alkaline Trio - From Here To Infirmary (CO 2001) Pre-Onned",
+        "sold_price": "$1.62",
+        "seller": null,
+        "image_id": "vulk8vl2szbqyes1zkx9",
+        "processed_at": "2025-10-08T21:50:26.079245"
+    },
+    {
+        "status": "Ended",
+        "date": "Ended Oct 1, 2025",
+        "listing_title": "Alkaline Trio - Remains (CD + DVD} - B-Sides and Rarities - 2007 - Vagrant Pro-Oncnna",
+        "sold_price": "$30.65",
+        "seller": null,
+        "image_id": "xu9j4rmsarotnhhnx2fk",
+        "processed_at": "2025-10-08T21:50:36.263859"
+    },
+    {
+        "status": "Ended",
+        "date": "Ended Sep 27, 2025",
+        "listing_title": "Alkaline Trio - From Here To Infirmary (CO 2001)",
+        "sold_price": "$1.61",
+        "seller": null,
+        "image_id": "gi6s40rnrhxgvvhvx84z",
+        "processed_at": "2025-10-08T21:50:51.932759"
+    }
+]
