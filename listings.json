@@ -1294,5 +1294,59 @@
         "seller": null,
         "image_id": "yj9gcbf7vhg2poctoweq",
         "processed_at": "2025-10-08T22:25:41.379516"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "Vtg Y2ks Alkaline Trio T-Shirt Punk Rock Band Goth Blink 182 Matt Skiba Size",
+        "sold_price": "$74.00",
+        "seller": null,
+        "image_id": "tzfm0rm9vvzi4nanmlxz",
+        "processed_at": "2025-10-09T11:28:40.607926"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "Good Mourning",
+        "sold_price": "$7.46",
+        "seller": null,
+        "image_id": "tzfm0rm9vvzi4nanmlxz",
+        "processed_at": "2025-10-09T11:28:40.607937"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "NEW LISTING Alkaline Trio Blue Meanies 7\u201d vinyl record Rare picture disc 1000 Bye Bye Love",
+        "sold_price": "$30.00",
+        "seller": null,
+        "image_id": "tzfm0rm9vvzi4nanmlxz",
+        "processed_at": "2025-10-09T11:28:40.607939"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "Vintage Alkaline Trio M Medium Black Gildan Punk Emo T Shirt Early 2000\u2019s Rare",
+        "sold_price": "$60.00",
+        "seller": null,
+        "image_id": "tzfm0rm9vvzi4nanmlxz",
+        "processed_at": "2025-10-09T11:28:40.607940"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "NEW Alkaline Trio Crimson Black And Red Split Vinyl LP Record Mourning Infirmary",
+        "sold_price": "$59.99",
+        "seller": null,
+        "image_id": "tzfm0rm9vvzi4nanmlxz",
+        "processed_at": "2025-10-09T11:28:40.607946"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "Nike 6.0 Heart & Sole Messenger Bag Alkaline Trio Collaboration NWT Rare",
+        "sold_price": "$102.50",
+        "seller": null,
+        "image_id": "tzfm0rm9vvzi4nanmlxz",
+        "processed_at": "2025-10-09T11:28:40.607948"
     }
 ]
