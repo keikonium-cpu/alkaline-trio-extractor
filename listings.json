@@ -1348,5 +1348,95 @@
         "seller": null,
         "image_id": "tzfm0rm9vvzi4nanmlxz",
         "processed_at": "2025-10-09T11:28:40.607948"
+    },
+    {
+        "status": "Ended",
+        "date": "Ended Oct 9, 2025",
+        "listing_title": "Illinois Entertainer Music Monthly(Feb 2024) Alkaline Trio(Cover) The defiant",
+        "sold_price": "$5.00",
+        "seller": null,
+        "image_id": "gvwsdr3imfmdzzx0dulc",
+        "processed_at": "2025-10-10T11:27:32.270546"
+    },
+    {
+        "status": "Ended",
+        "date": "Ended Oct 9, 2025",
+        "listing_title": "Matthew Matt Skiba Alkaline Trio Blink 182 California Nine Signed 8x10 Photo",
+        "sold_price": "$39.99",
+        "seller": null,
+        "image_id": "gvwsdr3imfmdzzx0dulc",
+        "processed_at": "2025-10-10T11:27:32.270557"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 9, 2025",
+        "listing_title": "Alkaline Trio / Hot Water Music LP LTD PINK VINYL (2023) emo punk",
+        "sold_price": "$12.00",
+        "seller": null,
+        "image_id": "gvwsdr3imfmdzzx0dulc",
+        "processed_at": "2025-10-10T11:27:32.270559"
+    },
+    {
+        "status": "Ended",
+        "date": "Ended Oct 9, 2025",
+        "listing_title": "Alkaline Trio From Here To Infirmary Record Purple",
+        "sold_price": "$75.00",
+        "seller": null,
+        "image_id": "gvwsdr3imfmdzzx0dulc",
+        "processed_at": "2025-10-10T11:27:32.270560"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Mar 16, 2025",
+        "listing_title": "ALKALINE TRIO All On Black 2003 EU PROMO CD Single 981 150-6 PUNK NEAR MINT New (Other)",
+        "sold_price": "$3.98",
+        "seller": "lakehouse_music",
+        "image_id": "gvwsdr3imfmdzzx0dulc",
+        "processed_at": "2025-10-10T11:27:32.270571"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Mar 17, 2025",
+        "listing_title": "Alkaline Trio - Crimson NEW Sealed Vinyl LP Album.",
+        "sold_price": "$38.99",
+        "seller": null,
+        "image_id": "gvwsdr3imfmdzzx0dulc",
+        "processed_at": "2025-10-10T11:27:32.270573"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Jul 28, 2025",
+        "listing_title": "Alkaline Trio Classic Heartskull T Shirt Mens Rock and Roll Music Band Tee Black",
+        "sold_price": "$24.95",
+        "seller": null,
+        "image_id": "gvwsdr3imfmdzzx0dulc",
+        "processed_at": "2025-10-10T11:27:32.270574"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Jun 21, 2023",
+        "listing_title": "Alkaline Trio GOOD MOURNING Limited Deluxe Edition NEW SEALED VINYL",
+        "sold_price": "$39.26",
+        "seller": null,
+        "image_id": "ajombuxhnt9z9jbeb5rj",
+        "processed_at": "2025-10-10T11:27:34.003558"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Mar 16, 2025",
+        "listing_title": "ALKALINE TRIO All On Black 2003 EU PROMO CD Single 981 150-6 PUNK NEAR MINT New (Other)",
+        "sold_price": "$4.01",
+        "seller": "lakehouse_music",
+        "image_id": "ajombuxhnt9z9jbeb5rj",
+        "processed_at": "2025-10-10T11:27:34.003573"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "Alkaline Trio Blue Meanies 7\u201d vinyl record Rare picture disc /1000 Bye Bye Love",
+        "sold_price": "$30.00",
+        "seller": null,
+        "image_id": "ajombuxhnt9z9jbeb5rj",
+        "processed_at": "2025-10-10T11:27:34.003578"
     }
 ]
