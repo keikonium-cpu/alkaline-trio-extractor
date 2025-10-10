@@ -1438,5 +1438,50 @@
         "seller": null,
         "image_id": "ajombuxhnt9z9jbeb5rj",
         "processed_at": "2025-10-10T11:27:34.003578"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold May 16, 2024",
+        "listing_title": "Alkaline Trio FROM HERE TO INFIRMARY New Black & Red Splatter Colored Vinyl LP",
+        "sold_price": "$30.72",
+        "seller": null,
+        "image_id": "x8cs5do9zknwicxkyugx",
+        "processed_at": "2025-10-10T23:28:28.006551"
+    },
+    {
+        "status": "Ended",
+        "date": "Ended Oct 10, 2025",
+        "listing_title": "The Damned Things \"High Crimes\" CD 2019 (Scott lan, Anthrax, Alkaline Trio) New (Other) ek ke kek Loroduct rating",
+        "sold_price": "$3.99",
+        "seller": null,
+        "image_id": "x8cs5do9zknwicxkyugx",
+        "processed_at": "2025-10-10T23:28:28.006562"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 10, 2025",
+        "listing_title": "Alkaline Trio - Zip Hoodie - Men's M Medium - NEW - X Punk Skiba X New (Other)",
+        "sold_price": "$54.95",
+        "seller": null,
+        "image_id": "x8cs5do9zknwicxkyugx",
+        "processed_at": "2025-10-10T23:28:28.006564"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 10, 2025",
+        "listing_title": "ALKALINE TRIO One Man Army CD 2004 *Disc Near Mint* FAST FREE POST",
+        "sold_price": "$8.49",
+        "seller": null,
+        "image_id": "x8cs5do9zknwicxkyugx",
+        "processed_at": "2025-10-10T23:28:28.006569"
+    },
+    {
+        "status": "Sold",
+        "date": "Sold Oct 8, 2025",
+        "listing_title": "Lot of 2 Alkaline Trio [Audio CDs] -Self-Titled & Crimson",
+        "sold_price": "$4.47",
+        "seller": null,
+        "image_id": "x8cs5do9zknwicxkyugx",
+        "processed_at": "2025-10-10T23:28:28.006570"
     }
 ]
